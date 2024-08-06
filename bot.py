@@ -1,5 +1,5 @@
 """
-Copyright 2022-2024 PoligonTeam
+Copyright 2022-2024 czubix
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,9 +41,34 @@ limitations under the License.
 
     Opcodes := type("Opcodes", (Enum,), type("EnumType", (dict,), {"_member_names": list(_opcodes.keys())})(**_opcodes)),
 
+    Route := lambda *args: (
+        _Route := namedtuple("Route", ["method", "endpoint"]),
+
+        _Route(args[0], "/" + "/".join(args[1:]))
+    )[-1],
+
+    Http := lambda token: (
+        _Http := namedtuple("Http", ["request"]),
+
+        session := aiohttp.ClientSession(),
+
+        request := lambda route, data: (
+            (
+                response := await session.request(route.method, "https://discord.com/api/v10" + route.endpoint, headers={"authorization": "Bot " + token}, json=data),
+                await response.json()
+            )[-1]
+            for _ in "_"
+        ).__anext__(),
+
+        _Http(request)
+    )[-1],
+
     WebSocket := lambda token: (
         (
-            _WebSocket := namedtuple("WebSoscket", ["run"]),
+            _WebSocket := namedtuple("WebSoscket", ["on", "run"]),
+
+            listeners := {},
+            on := lambda event, func: listeners.__setitem__(event, func),
 
             URL := "wss://gateway.discord.gg/?v=9&encoding=json",
 
@@ -54,7 +79,6 @@ limitations under the License.
             sequence := 0,
 
             send := lambda op, data: ws.send_json({"op": op.value, "d": data}),
-            request := lambda method, endpoint, data: session.request(method, "https://discord.com/api/v10" + endpoint, headers={"authorization": "Bot " + token}, **({"json": data} if data else {})),
 
             heartbeat := lambda interval: (
                 [
@@ -97,31 +121,12 @@ limitations under the License.
                             ).__anext__(),
                             Opcodes.DISPATCH: lambda: (
                                 (
-                                    await {
-                                        "MESSAGE_CREATE": lambda: (
-                                            (
-                                                await {
-                                                    "4ping": lambda: (
-                                                        (
-                                                            await request("POST", "/channels/" + d["channel_id"] + "/messages", {"content": "Pong!"}),
-                                                        )
-                                                        for _ in "_"
-                                                    ).__anext__()
-                                                }.get(d["content"], lambda: (
-                                                    (
-                                                        await asyncio.sleep(0),
-                                                    )
-                                                    for _ in "_"
-                                                ).__anext__())()
-                                            )
-                                            for _ in "_"
-                                        ).__anext__()
-                                    }.get(t, lambda: (
+                                    await listeners.get(t, lambda data: (
                                         (
                                             await asyncio.sleep(0),
                                         )
                                         for _ in "_"
-                                    ).__anext__())()
+                                    ).__anext__())(d)
                                 )
                                 for _ in "_"
                             ).__anext__()
@@ -137,7 +142,7 @@ limitations under the License.
                 for _ in "_"
             ).__anext__(),
 
-            _WebSocket(run)
+            _WebSocket(on, run)
         )[-1]
         for _ in "_"
     ).__anext__(),
@@ -149,6 +154,35 @@ limitations under the License.
             token_file.close(),
 
             websocket := await WebSocket(token),
+            http := Http(token),
+
+            websocket.on("READY", lambda data: (
+                (
+                    await asyncio.sleep(0),
+                    print("ready")
+                )
+                for _ in "_"
+            ).__anext__()),
+
+            websocket.on("MESSAGE_CREATE", lambda data: (
+                (
+                    await {
+                        "4ping": lambda: (
+                            (
+                                await http.request(Route("POST", "channels", data["channel_id"], "messages"), {"content": "Pong"})
+                            )
+                            for _ in "_"
+                        ).__anext__()
+                    }.get(data["content"], lambda: (
+                        (
+                            await asyncio.sleep(0),
+                        )
+                        for _ in "_"
+                    ).__anext__())()
+                )
+                for _ in "_"
+            ).__anext__()),
+
             loop.create_task(websocket.run())
         )
         for _ in "_"
