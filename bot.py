@@ -19,13 +19,14 @@ limitations under the License.
     aiohttp := __import__("aiohttp"),
     Enum := __import__("enum").Enum,
     namedtuple := __import__("collections").namedtuple,
+    reduce := __import__("functools").reduce,
     cycle := __import__("itertools").cycle,
     sys := __import__("sys"),
 
     loop := asyncio.new_event_loop(),
     asyncio.set_event_loop(loop),
 
-    _opcodes := dict(
+    _Opcodes := dict(
         DISPATCH = 0,
         HEARTBEAT = 1,
         IDENTIFY = 2,
@@ -39,7 +40,26 @@ limitations under the License.
         HEARTBEAT_ACK = 11
     ),
 
-    Opcodes := type("Opcodes", (Enum,), type("EnumType", (dict,), {"_member_names": list(_opcodes.keys())})(**_opcodes)),
+    _Intents := dict(
+        GUILDS = 1 << 0,
+        GUILD_MEMBERS = 1 << 1,
+        GUILD_BANS = 1 << 2,
+        GUILD_EMOJIS = 1 << 3,
+        GUILD_INTEGRATIONS = 1 << 4,
+        GUILD_WEBHOOKS = 1 << 5,
+        GUILD_INVITES = 1 << 6,
+        GUILD_VOICE_STATES = 1 << 7,
+        GUILD_PRESENCES = 1 << 8,
+        GUILD_MESSAGES = 1 << 9,
+        GUILD_MESSAGE_REACTIONS = 1 << 10,
+        GUILD_MESSAGE_TYPING = 1 << 11,
+        DIRECT_MESSAGES = 1 << 12,
+        DIRECT_MESSAGE_REACTIONS = 1 << 13,
+        DIRECT_MESSAGE_TYPING = 1 << 14
+    ),
+
+    Opcodes := type("Opcodes", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Opcodes.keys())})(**_Opcodes)),
+    Intents := type("Intents", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Intents.keys())})(**_Intents)),
 
     Route := lambda *args: (
         _Route := namedtuple("Route", ["method", "endpoint"]),
@@ -48,22 +68,27 @@ limitations under the License.
     )[-1],
 
     Http := lambda token: (
-        _Http := namedtuple("Http", ["request"]),
+        (
+            await asyncio.sleep(0),
 
-        session := aiohttp.ClientSession(),
+            _Http := namedtuple("Http", ["request"]),
 
-        request := lambda route, data: (
-            (
-                response := await session.request(route.method, "https://discord.com/api/v10" + route.endpoint, headers={"authorization": "Bot " + token}, json=data),
-                await response.json()
-            )[-1]
-            for _ in "_"
-        ).__anext__(),
+            session := aiohttp.ClientSession(),
 
-        _Http(request)
-    )[-1],
+            request := lambda route, data: (
+                (
+                    response := await session.request(route.method, "https://discord.com/api/v10" + route.endpoint, headers={"authorization": "Bot " + token}, json=data),
+                    await response.json()
+                )[-1]
+                for _ in "_"
+            ).__anext__(),
 
-    WebSocket := lambda token: (
+            _Http(request)
+        )[-1]
+        for _ in "_"
+    ).__anext__(),
+
+    WebSocket := lambda intents, token: (
         (
             _WebSocket := namedtuple("WebSoscket", ["on", "run"]),
 
@@ -73,7 +98,6 @@ limitations under the License.
             URL := "wss://gateway.discord.gg/?v=9&encoding=json",
 
             session := aiohttp.ClientSession(),
-
             ws := await session.ws_connect(URL),
 
             sequence := 0,
@@ -113,7 +137,7 @@ limitations under the License.
                                             "browser": "oneline-lib-python",
                                             "device": "oneline-lib-python"
                                         },
-                                        "intents": 32767,
+                                        "intents": intents,
                                         "large_threshold": 250
                                     })
                                 )
@@ -147,16 +171,27 @@ limitations under the License.
         for _ in "_"
     ).__anext__(),
 
-    main := (
+    Bot := lambda token, intents: (
+        (
+            _Bot := namedtuple("Bot", ["ws", "http"]),
+
+            ws := await WebSocket(intents, token),
+            http := await Http(token),
+
+            _Bot(ws, http)
+        )[-1]
+        for _ in "_"
+    ).__anext__(),
+
+    main := lambda: (
         (
             token_file := open("token", "r"),
             token := token_file.read(),
             token_file.close(),
 
-            websocket := await WebSocket(token),
-            http := Http(token),
+            bot := await Bot(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
 
-            websocket.on("READY", lambda data: (
+            bot.ws.on("READY", lambda data: (
                 (
                     await asyncio.sleep(0),
                     print("ready")
@@ -164,12 +199,12 @@ limitations under the License.
                 for _ in "_"
             ).__anext__()),
 
-            websocket.on("MESSAGE_CREATE", lambda data: (
+            bot.ws.on("MESSAGE_CREATE", lambda data: (
                 (
                     await {
                         "4ping": lambda: (
                             (
-                                await http.request(Route("POST", "channels", data["channel_id"], "messages"), {"content": "Pong"})
+                                await bot.http.request(Route("POST", "channels", data["channel_id"], "messages"), {"content": "Pong"})
                             )
                             for _ in "_"
                         ).__anext__()
@@ -183,11 +218,10 @@ limitations under the License.
                 for _ in "_"
             ).__anext__()),
 
-            loop.create_task(websocket.run())
-        )
+            await bot.ws.run()
+        )[-1]
         for _ in "_"
     ).__anext__(),
 
-    loop.create_task(main),
-    loop.run_forever()
+    asyncio.run(main()) if __name__ == "__main__" else None
 )
