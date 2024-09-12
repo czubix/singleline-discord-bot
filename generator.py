@@ -14,23 +14,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import re
-import sys
-
-def main(file: str) -> None:
-    with open(file, "r") as file:
-        content = file.read()
-
-    content = "\n".join(content.splitlines()[len(__doc__.splitlines()) + 1:])
-
-    content = re.sub(r"\n *", r"", content)
-    content = re.sub(r" ?(\+|-|\*|/|%|\*\*|//|\||&|^|~|==|!=|>|>=|<|<=|=|:=|\+=|-=|\*=|/=|%=|//=|\*\*=|\|=|&=|^=|~=|,|:) ?", r"\g<1>", content)
-    content = re.sub(r"(if|else|for|is|in|not|await) (\(|\[|{|\"|')", r"\g<1>\g<2>", content)
-    content = re.sub(r"(\)|]|}|\"|') (if|else|for|is|in|not)", r"\g<1>\g<2>", content)
-
-    content = '"""' + __doc__ + '"""\n\n' + content
-
-    print(content)
-
-if __name__ == "__main__":
-    main(sys.argv[1])
+(re:=__import__("re"),sys:=__import__("sys"),_:=open(sys.argv[1]),content:=_.read(),_.close(),content:="\n".join(content.splitlines()[len(__doc__.splitlines())+1:]),content:=re.sub(r"\n *",r"",content),content:=re.sub(r" ?(\+|-|\*|/|%|\*\*|//|\||&|^|~|==|!=|>|>=|<|<=|=|:=|\+=|-=|\*=|/=|%=|//=|\*\*=|\|=|&=|^=|~=|,|:) ?",r"\g<1>",content),content:=re.sub(r"(if|else|for|is|in|not|await) (\(|\[|{|\"|')",r"\g<1>\g<2>",content),content:=re.sub(r"(\)|]|}|\"|') (if|else|for|is|in|not)",r"\g<1>\g<2>",content),content:='"""'+__doc__+'"""\n\n'+content,print(content))
