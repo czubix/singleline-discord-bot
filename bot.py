@@ -90,7 +90,7 @@ limitations under the License.
 
     WebSocket := lambda intents, token: (
         (
-            _WebSocket := namedtuple("WebSoscket", ["on", "run"]),
+            _WebSocket := namedtuple("WebSocket", ["on", "run"]),
 
             listeners := {},
             on := lambda event, func: listeners.__setitem__(event, func),
@@ -99,8 +99,6 @@ limitations under the License.
 
             session := aiohttp.ClientSession(),
             ws := await session.ws_connect(URL),
-
-            sequence := 0,
 
             send := lambda op, data: ws.send_json({"op": op.value, "d": data}),
 
@@ -122,7 +120,6 @@ limitations under the License.
 
                         op := Opcodes(data.get("op")),
                         d := data.get("d"),
-                        s := data.get("s"),
                         t := data.get("t"),
 
                         await {
