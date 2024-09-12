@@ -220,5 +220,5 @@ limitations under the License.
         for _ in "_"
     ).__anext__(),
 
-    asyncio.run(main()) if __name__ == "__main__" else None
+    loop.run_until_complete(main()) if __name__ == "__main__" else None
 )
