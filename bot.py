@@ -19,8 +19,38 @@ limitations under the License.
     aiohttp := __import__("aiohttp"),
     Enum := __import__("enum").Enum,
     reduce := __import__("functools").reduce,
-    cycle := __import__("itertools").cycle,
     sys := __import__("sys"),
+
+    While := type("While", (), {
+        "__init__": lambda self, check: (
+            setattr(self, "check", check),
+            setattr(self, "count", 0),
+            setattr(self, "_stop", False), None)[-1],
+        "stop": lambda self: setattr(self, "_stop", True),
+        "__iter__": lambda self: self,
+        "__next__": lambda self: (
+            (
+                setattr(self, "count", self.count + 1),
+                self.count if self.check(self) and not self._stop else next(iter(()))
+            )[1]
+        )
+    }),
+
+    try_except := lambda coro: (
+        [
+            task := loop.create_task(coro),
+
+            [
+                [
+                    await asyncio.sleep(0.1),
+                ]
+                for _ in While(lambda _: not task.done())
+            ],
+
+            exc if isinstance(exc := task.exception(), Exception) else task.result()
+        ][-1]
+        for _ in "_"
+    ).__anext__(),
 
     _Opcodes := dict(
         DISPATCH = 0,
@@ -99,7 +129,7 @@ limitations under the License.
                     await self.send(Opcodes.HEARTBEAT, {}),
                     await asyncio.sleep(interval / 1000)
                 ]
-                for _ in cycle([None])
+                for _ in While(lambda _: True)
             ]
             for _ in "_"
         ).__anext__(),
@@ -152,7 +182,7 @@ limitations under the License.
                             for _ in "_"
                         ).__anext__())()
                     ]
-                    for _ in cycle([None])
+                    for _ in While(lambda _: True)
                 ]
             ]
             for _ in "_"
