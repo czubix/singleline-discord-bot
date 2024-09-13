@@ -29,26 +29,21 @@ limitations under the License.
         "stop": lambda self: setattr(self, "_stop", True),
         "__iter__": lambda self: self,
         "__next__": lambda self: (
-            (
-                setattr(self, "count", self.count + 1),
-                self.count if self.check(self) and not self._stop else next(iter(()))
-            )[1]
-        )
+            setattr(self, "count", self.count + 1),
+            self.count if self.check(self) and not self._stop else next(iter(())))[1]
     }),
 
     try_except := lambda coro: (
-        [
+        (
             task := loop.create_task(coro),
-
             [
                 [
-                    await asyncio.sleep(0.1),
+                    await asyncio.sleep(0.01)
                 ]
                 for _ in While(lambda _: not task.done())
             ],
-
             exc if isinstance(exc := task.exception(), Exception) else task.result()
-        ][-1]
+        )[-1]
         for _ in "_"
     ).__anext__(),
 
@@ -117,11 +112,17 @@ limitations under the License.
             setattr(self, "token", token),
             setattr(self, "intents", intents),
             setattr(self, "listeners", {}),
-            setattr(self, "session", aiohttp.ClientSession()), None)[-1],
+            setattr(self, "lock_listeners", {}),
+            setattr(self, "session", aiohttp.ClientSession()),
+            setattr(self, "_lock", True), None)[-1],
         "on": lambda self, event, func: (
             self.listeners.__setitem__(event, [])
             if event not in self.listeners else (),
             self.listeners[event].append(func), None)[-1],
+        "register": lambda self, event, func: (
+            self.lock_listeners.__setitem__(event, [])
+            if event not in self.lock_listeners else (),
+            self.lock_listeners[event].append(func), None)[-1],
         "send": lambda self, op, data: self.ws.send_json({"op": op.value, "d": data}),
         "heartbeat": lambda self, interval: (
             [
@@ -164,14 +165,30 @@ limitations under the License.
                             ).__anext__(),
                             Opcodes.DISPATCH: lambda: (
                                 [
-                                    await listener(d)
-                                    for listener in self.listeners
-                                        .get(t.lower(), [lambda data: (
-                                            (
-                                                await asyncio.sleep(0),
-                                            )
-                                            for _ in "_"
-                                        ).__anext__()])
+                                    [
+                                        await listener(d)
+                                        for listener in self.lock_listeners
+                                            .get(t, [lambda data: (
+                                                (
+                                                    await asyncio.sleep(0),
+                                                )
+                                                for _ in "_"
+                                            ).__anext__()])
+                                    ],
+                                    [
+                                        await listener(d)
+                                        for listener in self.listeners
+                                            .get(t.lower(), [lambda data: (
+                                                (
+                                                    await asyncio.sleep(0),
+                                                )
+                                                for _ in "_"
+                                            ).__anext__()])
+                                    ]
+                                    if not self._lock else
+                                    (
+                                        await asyncio.sleep(0)
+                                    )
                                 ]
                                 for _ in "_"
                             ).__anext__()
@@ -195,27 +212,36 @@ limitations under the License.
             setattr(self, "http", Http(token)),
             setattr(self, "bot_user", None),
             setattr(self, "guilds", []),
+            setattr(self, "unavailable_guilds", 0),
 
-            self.ws.on("ready", self.on_ready),
-            self.ws.on("guild_create", self.on_guild_create),
-            self.ws.on("guild_delete", self.on_guild_delete), None)[-1],
+            self.ws.register("READY", self.READY),
+            self.ws.register("GUILD_CREATE", self.GUILD_CREATE),
+            self.ws.register("GUILD_DELETE", self.GUILD_DELETE), None)[-1],
         "get_guild": lambda self, guild_id: (
             guild := [guild for guild in self.guilds if guild["id"] == guild_id], guild[0] if guild else None)[-1],
-        "on_ready": lambda self, data: (
+        "READY": lambda self, data: (
             (
                 await asyncio.sleep(0),
-                setattr(self, "bot_user", data["user"])
+                setattr(self, "bot_user", data["user"]),
+                setattr(self, "unavailable_guilds", len(data["guilds"]))
             )
             for _ in "_"
         ).__anext__(),
-        "on_guild_create": lambda self, guild: (
+        "GUILD_CREATE": lambda self, guild: (
             (
-                await asyncio.sleep(0),
-                self.guilds.append(guild)
+                self.guilds.append(guild),
+                (
+                    setattr(self.ws, "_lock", False),
+                    [
+                        await listener()
+                        for listener in self.ws.listeners.get("ready")
+                    ]
+                )
+                if len(self.guilds) >= self.unavailable_guilds else ()
             )
             for _ in "_"
         ).__anext__(),
-        "on_guild_delete": lambda self, guild: (
+        "GUILD_DELETE": lambda self, guild: (
             (
                 await asyncio.sleep(0),
                 self.guilds.remove(self.get_guild(guild["id"]))
@@ -232,7 +258,7 @@ limitations under the License.
 
             bot := Bot(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
 
-            bot.ws.on("ready", lambda _: (
+            bot.ws.on("ready", lambda: (
                 (
                     await asyncio.sleep(0),
                     print("logged in", bot.bot_user["username"])
