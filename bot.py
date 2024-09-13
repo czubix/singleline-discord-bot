@@ -18,13 +18,9 @@ limitations under the License.
     asyncio := __import__("asyncio"),
     aiohttp := __import__("aiohttp"),
     Enum := __import__("enum").Enum,
-    namedtuple := __import__("collections").namedtuple,
     reduce := __import__("functools").reduce,
     cycle := __import__("itertools").cycle,
     sys := __import__("sys"),
-
-    loop := asyncio.new_event_loop(),
-    asyncio.set_event_loop(loop),
 
     _Opcodes := dict(
         DISPATCH = 0,
@@ -61,62 +57,58 @@ limitations under the License.
     Opcodes := type("Opcodes", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Opcodes.keys())})(**_Opcodes)),
     Intents := type("Intents", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Intents.keys())})(**_Intents)),
 
-    Route := lambda *args: (
-        _Route := namedtuple("Route", ["method", "endpoint"]),
+    Route := type("Route", (), {
+        "__init__": lambda self, method, *args: (
+            setattr(self, "method", method),
+            setattr(self, "endpoint", "/" + "/".join(args)), None)[-1]
+    }),
 
-        _Route(args[0], "/" + "/".join(args[1:]))
-    )[-1],
+    Http := type("Http", (), {
+        "URL": "https://discord.com/api/v10",
+        "__init__": lambda self, token: (
+            setattr(self, "token", token),
+            setattr(self, "session", aiohttp.ClientSession()),
+            setattr(self, "headers", {"Authorization": "Bot " + self.token, "User-Agent": "onelinelib/1.0"}), None)[-1],
+        "request": lambda self, route, data: (
+            (
+                response := await self.session.request(route.method, Http.URL + route.endpoint, headers=self.headers, json=data),
+                await response.json()
+            )[-1]
+            for _ in "_"
+        ).__anext__(),
+        "send_message": lambda self, channel_id, data:
+            self.request(Route("POST", "channels", channel_id, "messages"), data)
+    }),
 
-    Http := lambda token: (
-        (
-            await asyncio.sleep(0),
-
-            _Http := namedtuple("Http", ["request"]),
-
-            session := aiohttp.ClientSession(),
-
-            request := lambda route, data: (
-                (
-                    response := await session.request(route.method, "https://discord.com/api/v10" + route.endpoint, headers={"authorization": "Bot " + token}, json=data),
-                    await response.json()
-                )[-1]
-                for _ in "_"
-            ).__anext__(),
-
-            _Http(request)
-        )[-1]
-        for _ in "_"
-    ).__anext__(),
-
-    WebSocket := lambda intents, token: (
-        (
-            _WebSocket := namedtuple("WebSocket", ["on", "run"]),
-
-            listeners := {},
-            on := lambda event, func: listeners.__setitem__(event, func),
-
-            URL := "wss://gateway.discord.gg/?v=9&encoding=json",
-
-            session := aiohttp.ClientSession(),
-            ws := await session.ws_connect(URL),
-
-            send := lambda op, data: ws.send_json({"op": op.value, "d": data}),
-
-            heartbeat := lambda interval: (
+    WebSocket := type("WebSocket", (), {
+        "URL": "wss://gateway.discord.gg/?v=9&encoding=json",
+        "__init__": lambda self, token, intents: (
+            setattr(self, "loop", asyncio.get_event_loop()),
+            setattr(self, "token", token),
+            setattr(self, "intents", intents),
+            setattr(self, "listeners", {}),
+            setattr(self, "session", aiohttp.ClientSession()), None)[-1],
+        "on": lambda self, event, func: (
+            self.listeners.__setitem__(event, [])
+            if event not in self.listeners else (),
+            self.listeners[event].append(func), None)[-1],
+        "send": lambda self, op, data: self.ws.send_json({"op": op.value, "d": data}),
+        "heartbeat": lambda self, interval: (
+            [
                 [
-                    [
-                        await send(Opcodes.HEARTBEAT, {}),
-                        await asyncio.sleep(interval / 1000)
-                    ]
-                    for _ in cycle([None])
+                    await self.send(Opcodes.HEARTBEAT, {}),
+                    await asyncio.sleep(interval / 1000)
                 ]
-                for _ in "_"
-            ).__anext__(),
-
-            run := lambda: (
+                for _ in cycle([None])
+            ]
+            for _ in "_"
+        ).__anext__(),
+        "run": lambda self: (
+            [
+                setattr(self, "ws", await self.session.ws_connect(WebSocket.URL)),
                 [
                     [
-                        data := await ws.receive_json(),
+                        data := await self.ws.receive_json(),
 
                         op := Opcodes(data.get("op")),
                         d := data.get("d"),
@@ -125,30 +117,32 @@ limitations under the License.
                         await {
                             Opcodes.HELLO: lambda: (
                                 (
-                                    loop.create_task(heartbeat(d["heartbeat_interval"])),
+                                    self.loop.create_task(self.heartbeat(d["heartbeat_interval"])),
 
-                                    await send(Opcodes.IDENTIFY, {
-                                        "token": token,
+                                    await self.send(Opcodes.IDENTIFY, {
+                                        "token": self.token,
                                         "properties": {
                                             "os": sys.platform,
-                                            "browser": "oneline-lib-python",
-                                            "device": "oneline-lib-python"
+                                            "browser": "onelinelib",
+                                            "device": "onelinelib"
                                         },
-                                        "intents": intents,
+                                        "intents": self.intents,
                                         "large_threshold": 250
                                     })
                                 )
                                 for _ in "_"
                             ).__anext__(),
                             Opcodes.DISPATCH: lambda: (
-                                (
-                                    await listeners.get(t, lambda data: (
-                                        (
-                                            await asyncio.sleep(0),
-                                        )
-                                        for _ in "_"
-                                    ).__anext__())(d)
-                                )
+                                [
+                                    await listener(d)
+                                    for listener in self.listeners
+                                        .get(t.lower(), [lambda data: (
+                                            (
+                                                await asyncio.sleep(0),
+                                            )
+                                            for _ in "_"
+                                        ).__anext__()])
+                                ]
                                 for _ in "_"
                             ).__anext__()
                         }.get(op, lambda: (
@@ -160,25 +154,45 @@ limitations under the License.
                     ]
                     for _ in cycle([None])
                 ]
-                for _ in "_"
-            ).__anext__(),
+            ]
+            for _ in "_"
+        ).__anext__()
+    }),
 
-            _WebSocket(on, run)
-        )[-1]
-        for _ in "_"
-    ).__anext__(),
+    Bot := type("Bot", (), {
+        "__init__": lambda self, token, intents: (
+            setattr(self, "ws", WebSocket(token, intents)),
+            setattr(self, "http", Http(token)),
+            setattr(self, "bot_user", None),
+            setattr(self, "guilds", []),
 
-    Bot := lambda token, intents: (
-        (
-            _Bot := namedtuple("Bot", ["ws", "http"]),
-
-            ws := await WebSocket(intents, token),
-            http := await Http(token),
-
-            _Bot(ws, http)
-        )[-1]
-        for _ in "_"
-    ).__anext__(),
+            self.ws.on("ready", self.on_ready),
+            self.ws.on("guild_create", self.on_guild_create),
+            self.ws.on("guild_delete", self.on_guild_delete), None)[-1],
+        "get_guild": lambda self, guild_id: (
+            guild := [guild for guild in self.guilds if guild["id"] == guild_id], guild[0] if guild else None)[-1],
+        "on_ready": lambda self, data: (
+            (
+                await asyncio.sleep(0),
+                setattr(self, "bot_user", data["user"])
+            )
+            for _ in "_"
+        ).__anext__(),
+        "on_guild_create": lambda self, guild: (
+            (
+                await asyncio.sleep(0),
+                self.guilds.append(guild)
+            )
+            for _ in "_"
+        ).__anext__(),
+        "on_guild_delete": lambda self, guild: (
+            (
+                await asyncio.sleep(0),
+                self.guilds.remove(self.get_guild(guild["id"]))
+            )
+            for _ in "_"
+        ).__anext__()
+    }),
 
     main := lambda: (
         (
@@ -186,26 +200,32 @@ limitations under the License.
             token := token_file.read(),
             token_file.close(),
 
-            bot := await Bot(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
+            bot := Bot(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
 
-            bot.ws.on("READY", lambda data: (
+            bot.ws.on("ready", lambda _: (
                 (
                     await asyncio.sleep(0),
-                    print("ready")
+                    print("logged in", bot.bot_user["username"])
                 )
                 for _ in "_"
             ).__anext__()),
 
-            bot.ws.on("MESSAGE_CREATE", lambda data: (
+            bot.ws.on("message_create", lambda message: (
                 (
                     await {
                         "4ping": lambda: (
                             (
-                                await bot.http.request(Route("POST", "channels", data["channel_id"], "messages"), {"content": "Pong"})
+                                await bot.http.send_message(message["channel_id"], {"content": "Pong"})
+                            )
+                            for _ in "_"
+                        ).__anext__(),
+                        "4guilds": lambda: (
+                            (
+                                await bot.http.send_message(message["channel_id"], {"content": ", ".join([guild["name"] for guild in bot.guilds])})
                             )
                             for _ in "_"
                         ).__anext__()
-                    }.get(data["content"], lambda: (
+                    }.get(message["content"], lambda: (
                         (
                             await asyncio.sleep(0),
                         )
@@ -220,5 +240,10 @@ limitations under the License.
         for _ in "_"
     ).__anext__(),
 
-    loop.run_until_complete(main()) if __name__ == "__main__" else None
+    (
+        loop := asyncio.new_event_loop(),
+        asyncio.set_event_loop(loop),
+
+        loop.run_until_complete(main())
+    ) if __name__ == "__main__" else ()
 )
