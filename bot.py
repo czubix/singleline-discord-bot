@@ -30,16 +30,14 @@ limitations under the License.
         "__iter__": lambda self: self,
         "__next__": lambda self: (
             setattr(self, "count", self.count + 1),
-            self.count if self.check(self) and not self._stop else next(iter(())))[1]
+            self.count if self.check(self) and not self._stop else next(iter(())))[-1]
     }),
 
     try_except := lambda coro: (
         (
             task := loop.create_task(coro),
             [
-                [
-                    await asyncio.sleep(0.01)
-                ]
+                await asyncio.sleep(0.01)
                 for _ in While(lambda _: not task.done())
             ],
             exc if isinstance(exc := task.exception(), Exception) else task.result()
@@ -82,6 +80,163 @@ limitations under the License.
     Opcodes := type("Opcodes", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Opcodes.keys())})(**_Opcodes)),
     Intents := type("Intents", (Enum,), type("EnumType", (dict,), {"_member_names": list(_Intents.keys())})(**_Intents)),
 
+    Embed := type("Embed", (), {
+        "__init__": lambda self, *, title = None, url = None, description = None, color = None, timestamp = None: (
+            setattr(self, "title", title) if title else (),
+            setattr(self, "url", url) if url else (),
+            setattr(self, "description", description) if description else (),
+            setattr(self, "color", color) if color else (),
+            setattr(self, "timestamp", timestamp) if timestamp else (), None)[-1],
+        "set_title": lambda self, title: (
+            setattr(self, "title", title), self)[-1],
+        "set_description": lambda self, description: (
+            setattr(self, "description", description), self)[-1],
+        "set_color": lambda self, color: (
+            setattr(self, "color", color), self)[-1],
+        "set_timestamp": lambda self, timestamp: (
+            setattr(self, "color", timestamp), self)[-1],
+        "set_image": lambda self, url: (
+            setattr(self, "image", {"url": url}), self)[-1],
+        "set_thumbnail": lambda self, url: (
+            setattr(self, "thumbnail", {"url": url}), self)[-1],
+        "set_footer": lambda self, text = None, icon_url = None: (
+            setattr(self, "footer", {"text": text, "icon_url": icon_url}), self)[-1],
+        "set_author": lambda self, name = None, url = None, icon_url = None: (
+            setattr(self, "author", {"name": name, "url": url, "icon_url": icon_url}), self)[-1],
+        "add_field": lambda self, name = None, value = None, inline = False: (
+            setattr(self, "fields", []) if not hasattr(self, "fields") else (),
+            self.fields.append({"name": name, "value": value, "inline": inline}), self)[-1],
+        "add_blank_field": lambda self, inline = True: (
+            self.add_field(name="\u200b", value="\u200b", inline=inline), self)[-1]
+    }),
+
+    Channel := type("Channel", (), {
+        "__init__": lambda self, __client, *, id, name, type, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "name", name),
+            setattr(self, "type", type), None)[-1],
+        "__str__": lambda self:
+            f"<Channel id={self.id!r} name={self.name!r} type={self.type!r}>",
+        "__repr__": lambda self:
+            f"<Channel id={self.id!r} name={self.name!r} type={self.type!r}>",
+        "send": lambda self, content = None, *, embed = None, embeds = None, other = None: (
+            data := (
+                ({"content": content} if content else {}) |
+                ({"embeds": [embed.__dict__ for embed in embeds or []] + [embed.__dict__] if embed else []} if embeds or embed else {}) |
+                ({"allowed_mentions": {"parse": [], "users": [], "replied_user": False}}) |
+                (other or {})
+            ),
+            self.__client.http.request(Route("POST", "channels", self.id, "messages"), data))[-1]
+    }),
+
+    Role := type("Role", (), {
+        "__init__": lambda self, __client, *, id, name, color, hoist, position, permissions, mentionable, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "name", name),
+            setattr(self, "color", color),
+            setattr(self, "hoist", hoist),
+            setattr(self, "position", position),
+            setattr(self, "permissions", permissions),
+            setattr(self, "mentionable", mentionable), None)[-1],
+        "__str__": lambda self:
+            f"<Role id={self.id!r} name={self.name!r} color={self.color!r} hoist={self.hoist!r} position={self.position!r} permissions={self.permissions!r} mentionable={self.mentionable!r}>",
+        "__repr__": lambda self:
+            f"<Role id={self.id!r} name={self.name!r} color={self.color!r} hoist={self.hoist!r} position={self.position!r} permissions={self.permissions!r} mentionable={self.mentionable!r}>"
+    }),
+
+    Emoji := type("Emoji", (), {
+        "__init__": lambda self, __client, *, id, name, animated, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "name", name),
+            setattr(self, "animated", animated), None)[-1],
+        "__str__": lambda self:
+            f"<Emoji id={self.id!r} name={self.name!r} animated={self.animated!r}>",
+        "__repr__": lambda self:
+            f"<Emoji id={self.id!r} name={self.name!r} animated={self.animated!r}>"
+    }),
+
+    Sticker := type("Sticker", (), {
+        "__init__": lambda self, __client, *, id, name, description, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "name", name),
+            setattr(self, "description", description), None)[-1],
+        "__str__": lambda self:
+            f"<Sticker id={self.id!r} name={self.name!r} description={self.description!r}>",
+        "__repr__": lambda self:
+            f"<Sticker id={self.id!r} name={self.name!r} description={self.description!r}>"
+    }),
+
+    User := type("User", (), {
+        "__init__": lambda self, __client, *, id, username, avatar, bot, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "username", username),
+            setattr(self, "avatar", avatar),
+            setattr(self, "bot", bot), None)[-1],
+        "__str__": lambda self:
+            f"<User id={self.id!r} username={self.username!r}>",
+        "__repr__": lambda self:
+            f"<User id={self.id!r} username={self.username!r}>"
+    }),
+
+    Member := type("Member", (), {
+        "__init__": lambda self, __client, guild, *, user, roles, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "user", User(__client, **user)),
+            setattr(self, "roles", [guild.get_role(role) for role in roles]), None)[-1],
+        "__str__": lambda self:
+            f"<Member user={self.user!r} roles={self.roles!r}>",
+        "__repr__": lambda self:
+            f"<Member user={self.user!r} roles={self.roles!r}>"
+    }),
+
+    Guild := type("Guild", (), {
+        "__init__": lambda self, __client, *, id, name, description, owner_id, icon, channels, roles, members, emojis, stickers, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "name", name),
+            setattr(self, "description", description),
+            setattr(self, "icon", icon),
+            setattr(self, "channels", [Channel(__client, **channel) for channel in channels]),
+            setattr(self, "roles", [Role(__client, **role) for role in roles]),
+            setattr(self, "members", [Member(__client, self, **member) for member in members]),
+            setattr(self, "owner", self.get_member(owner_id)),
+            setattr(self, "emojis", [Emoji(__client, **emoji) for emoji in emojis]),
+            setattr(self, "stickers", [Sticker(__client, **sticker) for sticker in stickers]), None)[-1],
+        "__str__": lambda self:
+            f"<Guild id={self.id!r} name={self.name!r}>",
+        "__repr__": lambda self:
+            f"<Guild id={self.id!r} name={self.name!r}>",
+        "get_channel": lambda self, channel_id: (
+            channel := [channel for channel in self.channels if channel.id == channel_id], channel[0] if channel else None)[-1],
+        "get_role": lambda self, role_id: (
+            role := [role for role in self.roles if role.id == role_id], role[0] if role else None)[-1],
+        "get_member": lambda self, user_id: (
+            member := [member for member in self.members if member.user.id == user_id], member[0] if member else None)[-1]
+    }),
+
+    Message := type("Message", (), {
+        "__init__": lambda self, __client, *, id, guild_id, channel_id, author, content, **kwargs: (
+            setattr(self, "__client", __client),
+            setattr(self, "id", id),
+            setattr(self, "guild", self.__client.get_guild(guild_id)),
+            setattr(self, "channel", self.guild.get_channel(channel_id)),
+            setattr(self, "member", self.guild.get_member(author["id"])),
+            setattr(self, "author", self.member.user),
+            setattr(self, "content", content), None)[-1],
+        "__str__": lambda self:
+            f"<Message id={self.id!r} channel={self.channel!r} author={self.author!r} content={self.content!r}>",
+        "__repr__": lambda self:
+            f"<Message id={self.id!r} channel={self.channel!r} author={self.author!r} content={self.content!r}>",
+        "reply": lambda self, content = None, *, embed = None, embeds = None, other = None: (
+            other := (other or {}) | {"message_reference": {"guild_id": self.guild.id, "channel_id": self.channel.id, "message_id": self.id}},
+            self.channel.send(content, embed=embed, embeds=embeds, other=other))[-1]
+    }),
+
     Route := type("Route", (), {
         "__init__": lambda self, method, *args: (
             setattr(self, "method", method),
@@ -94,51 +249,59 @@ limitations under the License.
             setattr(self, "token", token),
             setattr(self, "session", aiohttp.ClientSession()),
             setattr(self, "headers", {"Authorization": "Bot " + self.token, "User-Agent": "onelinelib/1.0"}), None)[-1],
-        "request": lambda self, route, data: (
+        "request": lambda self, route, data = None: (
             (
-                response := await self.session.request(route.method, Http.URL + route.endpoint, headers=self.headers, json=data),
+                response := await self.session.request(route.method, Http.URL + route.endpoint, headers=self.headers, **({"json": data} if data else {})),
                 await response.json()
             )[-1]
             for _ in "_"
-        ).__anext__(),
-        "send_message": lambda self, channel_id, data:
-            self.request(Route("POST", "channels", channel_id, "messages"), data)
+        ).__anext__()
     }),
 
-    WebSocket := type("WebSocket", (), {
+    Gateway := type("Gateway", (), {
         "URL": "wss://gateway.discord.gg/?v=9&encoding=json",
         "__init__": lambda self, token, intents: (
             setattr(self, "loop", asyncio.get_event_loop()),
             setattr(self, "token", token),
             setattr(self, "intents", intents),
             setattr(self, "listeners", {}),
-            setattr(self, "lock_listeners", {}),
-            setattr(self, "session", aiohttp.ClientSession()),
-            setattr(self, "_lock", True), None)[-1],
+            setattr(self, "middlewares", {}),
+            setattr(self, "session", aiohttp.ClientSession()), None)[-1],
         "on": lambda self, event, func: (
             self.listeners.__setitem__(event, [])
             if event not in self.listeners else (),
             self.listeners[event].append(func), None)[-1],
-        "register": lambda self, event, func: (
-            self.lock_listeners.__setitem__(event, [])
-            if event not in self.lock_listeners else (),
-            self.lock_listeners[event].append(func), None)[-1],
+        "register_middleware": lambda self, event, func: (
+            self.middlewares.__setitem__(event, func), None)[-1],
+        "dispatch": lambda self, event, *args: (
+            [
+                await listener(*args)
+                for listener in self.listeners
+                    .get(event.lower(), [lambda data: (
+                        (
+                            await asyncio.sleep(0),
+                        )
+                        for _ in "_"
+                    ).__anext__()])
+            ]
+            for _ in "_"
+        ).__anext__(),
         "send": lambda self, op, data: self.ws.send_json({"op": op.value, "d": data}),
         "heartbeat": lambda self, interval: (
             [
-                [
+                (
                     await self.send(Opcodes.HEARTBEAT, {}),
                     await asyncio.sleep(interval / 1000)
-                ]
+                )
                 for _ in While(lambda _: True)
             ]
             for _ in "_"
         ).__anext__(),
         "run": lambda self: (
-            [
-                setattr(self, "ws", await self.session.ws_connect(WebSocket.URL)),
+            (
+                setattr(self, "ws", await self.session.ws_connect(Gateway.URL)),
                 [
-                    [
+                    (
                         data := await self.ws.receive_json(),
 
                         op := Opcodes(data.get("op")),
@@ -164,32 +327,16 @@ limitations under the License.
                                 for _ in "_"
                             ).__anext__(),
                             Opcodes.DISPATCH: lambda: (
-                                [
-                                    [
-                                        await listener(d)
-                                        for listener in self.lock_listeners
-                                            .get(t, [lambda data: (
-                                                (
-                                                    await asyncio.sleep(0),
-                                                )
-                                                for _ in "_"
-                                            ).__anext__()])
-                                    ],
-                                    [
-                                        await listener(d)
-                                        for listener in self.listeners
-                                            .get(t.lower(), [lambda data: (
-                                                (
-                                                    await asyncio.sleep(0),
-                                                )
-                                                for _ in "_"
-                                            ).__anext__()])
-                                    ]
-                                    if not self._lock else
-                                    (
-                                        await asyncio.sleep(0)
-                                    )
-                                ]
+                                (
+                                    middleware := self.middlewares.get(t),
+                                    data := (
+                                        data := await middleware(d),
+                                        data if isinstance(data, tuple) else (data,)
+                                        if data else None
+                                    )[-1]
+                                    if middleware else None,
+                                    await self.dispatch(t, *data) if data else ()
+                                )
                                 for _ in "_"
                             ).__anext__()
                         }.get(op, lambda: (
@@ -198,56 +345,73 @@ limitations under the License.
                             )
                             for _ in "_"
                         ).__anext__())()
-                    ]
+                    )
                     for _ in While(lambda _: True)
                 ]
-            ]
+            )
             for _ in "_"
         ).__anext__()
     }),
 
-    Bot := type("Bot", (), {
+    Client := type("Client", (), {
         "__init__": lambda self, token, intents: (
-            setattr(self, "ws", WebSocket(token, intents)),
+            setattr(self, "ws", Gateway(token, intents)),
             setattr(self, "http", Http(token)),
             setattr(self, "bot_user", None),
             setattr(self, "guilds", []),
+            setattr(self, "users", {}),
             setattr(self, "unavailable_guilds", 0),
-
-            self.ws.register("READY", self.READY),
-            self.ws.register("GUILD_CREATE", self.GUILD_CREATE),
-            self.ws.register("GUILD_DELETE", self.GUILD_DELETE), None)[-1],
+            setattr(self, "_lock", True),
+            self.register_middlewares(), None)[-1],
         "get_guild": lambda self, guild_id: (
-            guild := [guild for guild in self.guilds if guild["id"] == guild_id], guild[0] if guild else None)[-1],
-        "READY": lambda self, data: (
-            (
-                await asyncio.sleep(0),
-                setattr(self, "bot_user", data["user"]),
-                setattr(self, "unavailable_guilds", len(data["guilds"]))
-            )
-            for _ in "_"
-        ).__anext__(),
-        "GUILD_CREATE": lambda self, guild: (
-            (
-                self.guilds.append(guild),
+            guild := [guild for guild in self.guilds if guild.id == guild_id], guild[0] if guild else None)[-1],
+        "get_user": lambda self, user_id:
+            self.users.get(user_id),
+        "register_middlewares": lambda self: (
+            self.ws.register_middleware("READY", lambda data: (
                 (
-                    setattr(self.ws, "_lock", False),
+                    await asyncio.sleep(0),
+                    setattr(self, "bot_user", User(self, **data["user"])),
+                    setattr(self, "unavailable_guilds", len(data["guilds"])),
+                    None
+                )[-1]
+                for _ in "_"
+            ).__anext__()),
+
+            self.ws.register_middleware("GUILD_CREATE", lambda guild: (
+                (
+                    guild := Guild(self, **guild),
+                    self.guilds.append(guild),
                     [
-                        await listener()
-                        for listener in self.ws.listeners.get("ready")
-                    ]
-                )
-                if len(self.guilds) >= self.unavailable_guilds else ()
-            )
-            for _ in "_"
-        ).__anext__(),
-        "GUILD_DELETE": lambda self, guild: (
-            (
-                await asyncio.sleep(0),
-                self.guilds.remove(self.get_guild(guild["id"]))
-            )
-            for _ in "_"
-        ).__anext__()
+                        self.users.__setitem__(member.user.id, member.user)
+                        for member in guild.members
+                    ],
+                    (
+                        setattr(self, "_lock", False),
+                        await self.ws.dispatch("ready")
+                    )
+                    if len(self.guilds) >= self.unavailable_guilds and self._lock else ()
+                )[0]
+                for _ in "_"
+            ).__anext__()),
+
+            self.ws.register_middleware("GUILD_DELETE", lambda guild: (
+                (
+                    await asyncio.sleep(0),
+                    guild := self.get_guild(guild["id"]),
+                    self.guilds.remove(guild)
+                )[1]
+                for _ in "_"
+            ).__anext__()),
+
+            self.ws.register_middleware("MESSAGE_CREATE", lambda message: (
+                (
+                    await asyncio.sleep(0),
+                    Message(self, **message)
+                )[-1]
+                for _ in "_"
+            ).__anext__())
+        )
     }),
 
     main := lambda: (
@@ -256,42 +420,67 @@ limitations under the License.
             token := token_file.read(),
             token_file.close(),
 
-            bot := Bot(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
+            client := Client(token, reduce(lambda a, b: a | b, [intent.value for intent in Intents])),
 
-            bot.ws.on("ready", lambda: (
+            application := await client.http.request(Route("GET", "applications", "@me")),
+            owners := [member["user"]["id"] for member in application["team"]["members"]],
+
+            client.ws.on("ready", lambda: (
                 (
                     await asyncio.sleep(0),
-                    print("logged in", bot.bot_user["username"])
+                    print("logged in", client.bot_user.username)
                 )
                 for _ in "_"
             ).__anext__()),
 
-            bot.ws.on("message_create", lambda message: (
+            prefix := "4",
+            commands := {
+                "ping": lambda message: (
+                    (
+                        await message.reply("Pong")
+                    )
+                    for _ in "_"
+                ).__anext__(),
+                "stats": lambda message: (
+                    (
+                        await message.reply(embed=Embed(
+                            title = "Bot statistics:",
+                            description = f"Guilds: `{len(client.guilds)}`\nUsers: `{len(client.users)}`"
+                        ))
+                    )
+                    for _ in "_"
+                ).__anext__(),
+                "eval": lambda message: (
+                    (
+                        code := message.content[len(prefix + "eval") + 1:],
+                        result := str(await try_except(eval(f"((await asyncio.sleep(0), {code})[-1] for _ in \"_\").__anext__()", globals() | {"client": client, "message": message}))),
+                        [
+                            await message.reply("```" + result[i:i+1994] + "```")
+                            for i in range(0, len(result), 1994)
+                        ]
+                    )
+                    if message.author.id in owners else
+                    (
+                        await message.reply("You don't have permission")
+                    )
+                    for _ in "_"
+                ).__anext__()
+            },
+
+            client.ws.on("message_create", lambda message: (
                 (
-                    await {
-                        "4ping": lambda: (
-                            (
-                                await bot.http.send_message(message["channel_id"], {"content": "Pong"})
-                            )
-                            for _ in "_"
-                        ).__anext__(),
-                        "4guilds": lambda: (
-                            (
-                                await bot.http.send_message(message["channel_id"], {"content": ", ".join([guild["name"] for guild in bot.guilds])})
-                            )
-                            for _ in "_"
-                        ).__anext__()
-                    }.get(message["content"], lambda: (
+                    await commands.get(message.content[len(prefix):].split(" ", 1)[0], lambda _: (
                         (
                             await asyncio.sleep(0),
                         )
                         for _ in "_"
-                    ).__anext__())()
+                    ).__anext__())(message)
+                    if message.content.startswith(prefix) else ()
                 )
                 for _ in "_"
             ).__anext__()),
 
-            await bot.ws.run()
+            await client.ws.run()
         )[-1]
         for _ in "_"
     ).__anext__(),
